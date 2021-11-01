@@ -1004,3 +1004,18 @@ func @aten_matmul_broadcast_vector(%arg0: !torch.vtensor<[?,?,?,?,?],f32>, %arg1
   %0 = torch.aten.matmul %arg0, %arg1 : !torch.vtensor<[?,?,?,?,?],f32>, !torch.vtensor<[?],f32> -> !torch.tensor
   return %0 : !torch.tensor
 }
+
+// -----
+// CHECK-LABEL: func @torch.aten.to.dtype
+// CHECK-SAME:  (%[[ARG:.*]]: !torch.tensor<[?,?],f32>) -> !torch.tensor
+// CHECK:           %[[TODTYPE:.*]] = torch.aten.to.dtype %[[ARG]], %{{.*}}, %{{.*}}, %{{.*}}, %{{.*}} : !torch.tensor<[?,?],f32>, !torch.int, !torch.bool, !torch.bool, !torch.none -> !torch.tensor<[?,?],si64>
+// CHECK-NEXT:      %[[RES:.*]] = torch.tensor_static_info_cast %[[TODTYPE]] : !torch.tensor<[?,?],si64> to !torch.tensor
+// CHECK-NEXT:      return %[[RES]] : !torch.tensor
+
+func @torch.aten.to.dtype(%arg0: !torch.tensor<[?,?],f32>) -> !torch.tensor{
+    %none = torch.constant.none
+    %false = torch.constant.bool false
+    %int6 = torch.constant.int 4
+    %0 = torch.aten.to.dtype %arg0, %int6, %false, %false, %none : !torch.tensor<[?,?],f32>, !torch.int, !torch.bool, !torch.bool, !torch.none -> !torch.tensor
+    return %0 : !torch.tensor
+}

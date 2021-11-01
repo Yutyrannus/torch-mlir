@@ -84,3 +84,28 @@ func @elementwise$static_1(%arg0: !torch.vtensor<[?],f32>, %arg1: !torch.vtensor
   %1 = torch.aten.mul.Tensor %arg0, %arg1 : !torch.vtensor<[?],f32>, !torch.vtensor<[1],f32> -> !torch.vtensor<[?],f32>
   return %1 : !torch.vtensor<[?],f32>
 }
+
+// CHECK-LABEL: func @elementwise$to_dtype
+// CHECK-SAME:  (%[[ARG:.*]]: !torch.vtensor<[?,?],f32>) -> !torch.vtensor<[?,?],si64>
+// CHECK-NEXT:      %[[INPUT:.*]] = torch_c.to_builtin_tensor %[[ARG]] : !torch.vtensor<[?,?],f32> -> tensor<?x?xf32>
+// CHECK:           %[[CONSTANT0:.*]] = arith.constant 0 : index
+// CHECK-NEXT:      %[[DIM0:.*]] = tensor.dim %[[INPUT]], %[[CONSTANT0]] : tensor<?x?xf32>
+// CHECK-NEXT:      %[[CONSTANT1:.*]] = arith.constant 1 : index
+// CHECK-NEXT:      %[[DIM1:.*]] = tensor.dim %[[INPUT]], %[[CONSTANT1]] : tensor<?x?xf32>
+// CHECK-NEXT:      %[[OUTPUT:.*]] = linalg.init_tensor [%[[DIM0]], %[[DIM1]]] : tensor<?x?xi64>
+// CHECK-NEXT:      %[[GENERIC:.*]] = linalg.generic {indexing_maps = [affine_map<(d0, d1) -> (d0, d1)>, affine_map<(d0, d1) -> (d0, d1)>], iterator_types = ["parallel", "parallel"]} ins(%[[INPUT]] : tensor<?x?xf32>) outs(%[[OUTPUT]] : tensor<?x?xi64>) {
+// CHECK-NEXT:          ^bb0(%[[ARG1:.*]]: f32, %[[ARG2:.*]]: i64)
+// CHECK-NEXT:              %[[CONVERT:.*]] = arith.fptosi %[[ARG1]] : f32 to i64
+// CHECK-NEXT:              linalg.yield %[[CONVERT]] : i64
+// CHECK-NEXT:      } -> tensor<?x?xi64>
+// CHECK-NEXT:      %[[CAST:.*]] = tensor.cast %[[GENERIC]] : tensor<?x?xi64> to tensor<?x?xi64>
+// CHECK-NEXT:      %[[RESULT:.*]] = torch_c.from_builtin_tensor %[[CAST]] : tensor<?x?xi64> -> !torch.vtensor<[?,?],si64>
+// CHECK-NEXT:      return %[[RESULT]] : !torch.vtensor<[?,?],si64>
+
+func @elementwise$to_dtype(%arg0: !torch.vtensor<[?,?],f32>) -> !torch.vtensor<[?,?],si64>{
+    %none = torch.constant.none
+    %false = torch.constant.bool false
+    %int6 = torch.constant.int 4
+    %0 = torch.aten.to.dtype %arg0, %int6, %false, %false, %none : !torch.vtensor<[?,?],f32>, !torch.int, !torch.bool, !torch.bool, !torch.none -> !torch.vtensor<[?,?],si64>
+    return %0 : !torch.vtensor<[?,?],si64>
+}

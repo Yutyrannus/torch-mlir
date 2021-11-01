@@ -1454,6 +1454,27 @@ static Value createLinalgPayloadCalculationForElementwiseOp(
     Value mult = b.create<arith::MulFOp>(loc, self, alpha);
     return b.create<arith::SubFOp>(loc, other, mult);
   }
+  if (auto atenToDtype = dyn_cast<AtenToDtypeOp>(op)) {
+    Value input = payloadArgs[0];
+    Type inType = input.getType();
+    Type outType = atenToDtype.getType().cast<ValueTensorType>().getDtype();
+    Value result;
+    if (!inType.isF32()) {
+      atenToDtype.emitError("unimplemented: non-floating point dtype");
+      return nullptr;
+    } else {
+      if (inType == outType)
+        result = input;
+      else if (outType.isInteger(64))
+        result = b.create<arith::FPToSIOp>(loc, b.getI64Type(), input);
+      else if (outType.isInteger(1))
+        result = b.create<arith::FPToSIOp>(loc, b.getI1Type(), input);
+      else
+        atenToDtype.emitError("unimplemented: unsupported target dtype");
+    }
+    return result;
+  }
+
   op->emitError("unimplemented lowering in "
                 "createLinalgPayloadCalculationForElementwiseOp");
   return nullptr;
@@ -1663,7 +1684,8 @@ struct ConvertElementwiseOp : ConversionPattern {
     if (!isa<AtenTanhOp, AtenReluOp, AtenGeluOp, AtenAddTensorOp,
              AtenMulTensorOp, AtenDivTensorOp, AtenSubTensorOp,
              AtenLerpTensorOp, AtenSigmoidOp, AtenExpOp, AtenMinimumOp,
-             AtenMaximumOp, AtenClampOp, AtenRsubScalarOp, AtenLogOp>(op))
+             AtenMaximumOp, AtenToDtypeOp, AtenClampOp, AtenRsubScalarOp,
+             AtenLogOp>(op))
       return rewriter.notifyMatchFailure(op, "not a supported elementwise op");
 
     if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
@@ -2799,7 +2821,8 @@ public:
     target.addIllegalOp<AtenTanhOp, AtenReluOp, AtenGeluOp, AtenAddTensorOp,
                         AtenMulTensorOp, AtenDivTensorOp, AtenSubTensorOp,
                         AtenLerpTensorOp, AtenSigmoidOp, AtenMinimumOp,
-                        AtenMaximumOp, AtenClampOp, AtenRsubScalarOp, AtenLogOp>();
+                        AtenMaximumOp, AtenToDtypeOp, AtenClampOp,
+                        AtenRsubScalarOp, AtenLogOp>();
     patterns.add<ConvertElementwiseOp>(typeConverter, context);
     target.addIllegalOp<AtenUnsqueezeOp>();
     patterns.add<ConvertAtenUnsqueezeOp>(typeConverter, context);
@@ -2839,7 +2862,6 @@ public:
     patterns.add<ConvertAtenContiguousOp>(typeConverter, context);
     target.addIllegalOp<AtenIntTensorOp>();
     patterns.add<ConvertAtenIntTensorOp>(typeConverter, context);
-
     if (failed(applyPartialConversion(getOperation(), target,
                                       std::move(patterns))))
       return signalPassFailure();
