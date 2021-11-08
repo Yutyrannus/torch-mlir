@@ -298,6 +298,8 @@ public:
       return visitAtenFlattenUsingIntsOp(flatten, operands);
     } else if (auto unsqueeze = dyn_cast<AtenUnsqueezeOp>(op)) {
       return visitAtenUnsqueezeOp(unsqueeze, operands);
+    } else if (auto reshape = dyn_cast<AtenReshapeOp>(op)) {
+      return visitAtenReshapeOp(reshape, operands);
     } else if (auto arange = dyn_cast<AtenArangeOp>(op)) {
       return visitAtenArangeOp(arange);
     } else if (auto arangeStart = dyn_cast<AtenArangeStartOp>(op)) {
@@ -451,6 +453,9 @@ private:
   ChangeResult
   visitAtenUnsqueezeOp(AtenUnsqueezeOp op,
                        ArrayRef<LatticeElement<ValueKnowledge> *> operands);
+  ChangeResult
+  visitAtenReshapeOp(AtenReshapeOp op,
+                     ArrayRef<LatticeElement<ValueKnowledge> *> operands);
 
   ChangeResult visitAtenArangeLikeOpHelper(Operation *op,
                                            llvm::Optional<Value> start,
@@ -850,6 +855,18 @@ ChangeResult TypeAnalyzer::visitAtenUnsqueezeOp(
       knowledge.sizes.insert(knowledge.sizes.begin() + dim, 1);
     }
   }
+  return getLatticeElement(op.getResult()).join(knowledge);
+}
+
+ChangeResult TypeAnalyzer::visitAtenReshapeOp(
+    AtenReshapeOp op, ArrayRef<LatticeElement<ValueKnowledge> *> operands) {
+  auto input = operands[0]->getValue();
+  auto knowledge =
+      ValueKnowledge::getNotNonePessimisticValueState(op.getContext());
+  knowledge.dtype = input.dtype;
+
+  fillInSizesGivenSizesList(knowledge, op.shape());
+  llvm::errs() << "!!!!!\n";
   return getLatticeElement(op.getResult()).join(knowledge);
 }
 

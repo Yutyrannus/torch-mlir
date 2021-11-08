@@ -1332,6 +1332,20 @@ def Torch_AtenUnsqueezeOp : Torch_Op<"aten.unsqueeze", [
   let assemblyFormat = "$self `,` $dim attr-dict `:` type($self) `,` type($dim) `->` type($result)";
 }
 
+def Torch_AtenReshapeOp : Torch_Op<"aten.reshape", [
+    AllowsTypeRefinement
+  ]> {
+  let summary = "Generated op for `aten::reshape : (Tensor, int[]) -> (Tensor)`";
+  let arguments = (ins
+    AnyTorchTensorType:$self,
+    TorchIntListType:$shape
+  );
+  let results = (outs
+    AnyTorchTensorType:$result
+  );
+  let assemblyFormat = "$self `,` $shape attr-dict `:` type($self) `,` type($shape) `->` type($result)";
+}
+
 def Torch_AtenFlattenUsingIntsOp : Torch_Op<"aten.flatten.using_ints", [
     AllowsTypeRefinement
   ]> {

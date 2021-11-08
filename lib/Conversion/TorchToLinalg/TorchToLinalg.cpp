@@ -2244,6 +2244,94 @@ public:
 } // namespace
 
 namespace {
+class ConvertAtenReshapeOp : public OpConversionPattern<AtenReshapeOp> {
+public:
+  using OpConversionPattern::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(AtenReshapeOp op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const override {
+    if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
+      return failure();
+    SmallVector<int64_t> shapes;
+    if (!matchPattern(op.shape(), m_TorchConstantIntList(shapes)))
+      return rewriter.notifyMatchFailure(op, "all shape must be constant");
+    op->getResult(0).getType().dump();
+    llvm::errs() << "----\n";
+    //typeConverter->convertType(op->getResult(0).getType()).dump();
+    auto resultType = getTypeConverter()
+                          ->convertType(op->getResult(0).getType())
+                          .cast<RankedTensorType>();
+                          resultType.dump();
+    llvm::errs() << "aaaaaaa----\n";
+    int64_t resultRank = resultType.getRank();
+
+    auto loc = op->getLoc();
+    // Extract the desired output size as a list of integers. This list should
+    // have been created using the operation `torch.prim.ListConstruct`.
+    SmallVector<Value> expectedSizeTorchInt;
+    if (!getListConstructElements(op.shape(), expectedSizeTorchInt)) {
+      return rewriter.notifyMatchFailure(op,
+                                         "unimplemented: the desired size is "
+                                         "not constructed from ListConstruct");
+    }
+    SmallVector<Value> expectedSize = getTypeConvertedValues(
+        rewriter, loc, typeConverter, expectedSizeTorchInt);
+    if (expectedSize.size() != resultRank) {
+      return rewriter.notifyMatchFailure(
+          op, "desired size list length mismatches with the result type rank");
+    }
+
+#if 0
+    // Check if the `aten.View` can be legalized to `linalg.TensorExpandShape`.
+    // It only handles the case of static dimension expansion. If the dimension
+    // is dynamic, it must not be expanded/splitted.
+    // TODO: Handle the case of dynamic dimension expansion.
+    SmallVector<ReassociationIndices> reassociation(inputRank);
+    SmallVector<int64_t> resultShape;
+    int64_t j = 0;
+    for (auto i : llvm::seq<int64_t>(0, inputRank)) {
+      if (inputType.isDynamicDim(i)) {
+        Value dim = getDimOp(rewriter, loc, input, i);
+        if (j >= resultRank) {
+          return rewriter.notifyMatchFailure(
+              op, "desired size is not compatible with the input tensor size");
+        }
+        checkDimEqualHelper(rewriter, loc, dim, expectedSize[j]);
+        reassociation[i].push_back(j++);
+        resultShape.push_back(kUnknownSize);
+      } else {
+        int64_t expandedDim = inputType.getDimSize(i);
+        int64_t outputDim;
+        // A do-while loop is used here to handle the cases where the input
+        // tensor has a dimension of size 1.
+        do {
+          if (j >= resultRank ||
+              !matchPattern(expectedSizeTorchInt[j],
+                            m_TorchConstantInt(&outputDim)) ||
+              expandedDim % outputDim != 0) {
+            return rewriter.notifyMatchFailure(
+                op, "total number of elements mismatch in the expansion");
+          }
+          reassociation[i].push_back(j++);
+          resultShape.push_back(outputDim);
+          expandedDim /= outputDim;
+        } while (expandedDim != 1);
+      }
+    }
+    // Make sure that the splitted dimensions have the same number of elements
+    // as the dimension got splitted from.
+    if (j != resultRank)
+      return rewriter.notifyMatchFailure(
+          op, "desired size is not compatible with the input tensor size");
+          #endif
+    rewriter.create<tensor::ReshapeOp>(op.getLoc(), resultType, operands[0],
+                                       expectedSize)->dump();
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 class ConvertAtenTransposeIntOp
     : public OpConversionPattern<AtenTransposeIntOp> {
 public:
@@ -2820,6 +2908,8 @@ public:
     patterns.add<ConvertElementwiseOp>(typeConverter, context);
     target.addIllegalOp<AtenUnsqueezeOp>();
     patterns.add<ConvertAtenUnsqueezeOp>(typeConverter, context);
+    target.addIllegalOp<AtenReshapeOp>();
+    patterns.add<ConvertAtenReshapeOp>(typeConverter, context);
     target.addIllegalOp<AtenConv2dOp>();
     patterns.add<ConvertAtenConv2dOp>(typeConverter, context);
     target.addIllegalOp<AtenAdaptiveAvgPool2dOp>();

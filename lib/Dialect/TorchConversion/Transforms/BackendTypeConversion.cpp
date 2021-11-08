@@ -39,6 +39,11 @@ setupValueTensorToBuiltinTensorConversion(ConversionTarget &target,
                     TorchConversion::FromBuiltinTensorOp>();
   typeConverter.addConversion(
       [](Torch::ValueTensorType type) -> Optional<Type> {
+        llvm::errs() << "type c!!\n";
+        type.dump();
+        llvm::errs() << "\n";
+type.toBuiltinTensor().dump();
+        llvm::errs() << "end!!\n";
         return type.toBuiltinTensor();
       });
   typeConverter.addTargetMaterialization([](OpBuilder &builder, TensorType type,

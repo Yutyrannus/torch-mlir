@@ -545,3 +545,20 @@ class LogSoftmaxIntModule(torch.nn.Module):
 @register_test_case(module_factory=lambda: LogSoftmaxIntModule())
 def LogSoftmaxIntModule_basic(module, tu: TestUtils):
     module.forward(torch.randn(3, 2, 4).double())
+
+class ReshapeModule(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1], torch.float32, True)
+    ])
+    def forward(self, a):
+        return a.reshape((2,2))
+
+@register_test_case(
+    module_factory=lambda: ReshapeModule())
+def ReshapeModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(4))
